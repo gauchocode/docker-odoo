@@ -6,6 +6,9 @@ SHELL ["/bin/bash", "-xo", "pipefail", "-c"]
 # Target arch for wkhtmltopdf
 ARG TARGETARCH
 
+# ===== Copiar requirements.txt primero (para cache) =====
+COPY requirements.txt /tmp/requirements.txt
+
 # ===== Base deps + wkhtmltopdf =====
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive \
@@ -34,14 +37,20 @@ RUN apt-get update && \
         python3-xlrd \
         python3-xlwt \
         xz-utils \
-        # --- extras para AFIP / firmas XML ---
         python3-jwt \
         libxml2 \
         libxmlsec1 \
         libxmlsec1-openssl \
         build-essential \
         python3-dev \
-    && if [ -z "${TARGETARCH}" ]; then TARGETARCH="$(dpkg --print-architecture)"; fi \
+    && rm -rf /var/lib/apt/lists/*
+
+# ===== Python dependencies (temprano para cache) =====
+RUN pip install --no-cache-dir --break-system-packages -r /tmp/requirements.txt \
+    && rm /tmp/requirements.txt
+
+# ===== wkhtmltopdf =====
+RUN if [ -z "${TARGETARCH}" ]; then TARGETARCH="$(dpkg --print-architecture)"; fi \
     && WKHTMLTOPDF_ARCH=${TARGETARCH} \
     && case ${TARGETARCH} in \
         "amd64")  WKHTMLTOPDF_ARCH=amd64 && WKHTMLTOPDF_SHA=967390a759707337b46d1c02452e2bb6b2dc6d59  ;; \
@@ -50,6 +59,7 @@ RUN apt-get update && \
       esac \
     && curl -o wkhtmltox.deb -sSL https://github.com/wkhtmltopdf/packaging/releases/download/0.12.6.1-3/wkhtmltox_0.12.6.1-3.jammy_${WKHTMLTOPDF_ARCH}.deb \
     && echo ${WKHTMLTOPDF_SHA} wkhtmltox.deb | sha1sum -c - \
+    && apt-get update \
     && apt-get install -y --no-install-recommends ./wkhtmltox.deb \
     && rm -rf /var/lib/apt/lists/* wkhtmltox.deb
 
@@ -80,29 +90,24 @@ RUN curl -o odoo.deb -sSL http://nightly.odoo.com/${ODOO_VERSION}/nightly/deb/od
     && apt-get -y install --no-install-recommends ./odoo.deb \
     && rm -rf /var/lib/apt/lists/* odoo.deb
 
-# ===== Python dependencies from requirements.txt =====
-COPY requirements.txt /tmp/requirements.txt
-RUN pip install --no-cache-dir --break-system-packages -r /tmp/requirements.txt \
-    && rm /tmp/requirements.txt \
-    && python3 -c "import jwt, pyafipws, pysimplesoap; \
+# ===== Verificar instalación =====
+RUN python3 -c "import jwt, pyafipws, pysimplesoap; \
 print('JWT OK', getattr(jwt,'__version__','unknown')); \
 print('pyafipws OK', getattr(pyafipws,'__version__','unknown')); \
 print('pysimplesoap OK', getattr(pysimplesoap,'__version__','unknown'))"
 
-# ===== Config y entrypoint =====
+# ===== Config y entrypoint (al final para cache) =====
 COPY ./entrypoint.sh /
 COPY ./odoo.conf /etc/odoo/
+COPY wait-for-psql.py /usr/local/bin/wait-for-psql.py
 
 RUN chown odoo /etc/odoo/odoo.conf \
     && mkdir -p /mnt/extra-addons \
     && chown -R odoo /mnt/extra-addons
 
 VOLUME ["/var/lib/odoo", "/mnt/extra-addons"]
-
 EXPOSE 8069 8071 8072
 ENV ODOO_RC /etc/odoo/odoo.conf
-
-COPY wait-for-psql.py /usr/local/bin/wait-for-psql.py
 
 USER odoo
 ENTRYPOINT ["/entrypoint.sh"]

@@ -2,9 +2,9 @@ name: Build and Push Docker Image
 
 on:
   push:
-    branches: [ "*" ]  # Todas las branches
+    branches: [ "*" ]
   pull_request:
-    branches: [ "*" ]  # PRs a cualquier branch
+    branches: [ "*" ]
 
 env:
   REGISTRY: ghcr.io
@@ -35,13 +35,9 @@ jobs:
       with:
         images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
         tags: |
-          # Tag con el nombre de la branch
           type=ref,event=branch
-          # Tag con el nombre de la branch del PR
           type=ref,event=pr
-          # Tag latest solo para main/master
           type=raw,value=latest,enable={{is_default_branch}}
-          # Tag con sha del commit
           type=sha,prefix={{branch}}-
 
     - name: Set up Docker Buildx
@@ -51,9 +47,14 @@ jobs:
       uses: docker/build-push-action@v5
       with:
         context: .
-        platforms: linux/amd64,linux/arm64
+        platforms: linux/amd64  # Solo una arquitectura
         push: ${{ github.event_name != 'pull_request' }}
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
+        # Cache más agresivo usando registry
+        cache-from: |
+          type=gha
+          type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:cache
+        cache-to: |
+          type=gha,mode=max
+          type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:cache,mode=max
