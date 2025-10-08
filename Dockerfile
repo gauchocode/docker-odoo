@@ -81,7 +81,7 @@ RUN echo 'deb http://apt.postgresql.org/pub/repos/apt/ noble-pgdg main' > /etc/a
 RUN npm install -g rtlcss
 
 # ===== Odoo 18 =====
-ENV ODOO_VERSION 18.0
+ENV ODOO_VERSION=18.0
 ARG ODOO_RELEASE=20250918
 ARG ODOO_SHA=87dee1ca919a9920f1ad1b4c08933052e47c0add
 RUN curl -o odoo.deb -sSL http://nightly.odoo.com/${ODOO_VERSION}/nightly/deb/odoo_${ODOO_VERSION}.${ODOO_RELEASE}_all.deb \
@@ -107,7 +107,7 @@ RUN chown odoo /etc/odoo/odoo.conf \
 
 VOLUME ["/var/lib/odoo", "/mnt/extra-addons"]
 EXPOSE 8069 8071 8072
-ENV ODOO_RC /etc/odoo/odoo.conf
+ENV ODOO_RC=/etc/odoo/odoo.conf
 
 USER odoo
 ENTRYPOINT ["/entrypoint.sh"]
