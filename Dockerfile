@@ -109,6 +109,10 @@ VOLUME ["/var/lib/odoo", "/mnt/extra-addons"]
 EXPOSE 8069 8071 8072
 ENV ODOO_RC=/etc/odoo/odoo.conf
 
+# FIX permisos de sesiones
+RUN mkdir -p /var/lib/odoo/sessions \
+    && chown -R odoo:odoo /var/lib/odoo
+
 USER odoo
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["odoo"]
